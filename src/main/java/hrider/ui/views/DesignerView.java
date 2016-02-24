@@ -1,8 +1,10 @@
 package hrider.ui.views;
 
+import com.google.common.collect.Maps;
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
 import com.intellij.uiDesigner.core.Spacer;
+
 import hrider.actions.Action;
 import hrider.actions.RunnableAction;
 import hrider.config.ClusterConfig;
@@ -24,6 +26,7 @@ import hrider.ui.*;
 import hrider.ui.controls.WideComboBox;
 import hrider.ui.design.*;
 import hrider.ui.forms.*;
+
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -32,6 +35,7 @@ import javax.swing.*;
 import javax.swing.event.*;
 import javax.swing.plaf.basic.BasicSplitPaneDivider;
 import javax.swing.table.*;
+
 import java.awt.*;
 import java.awt.event.*;
 import java.beans.PropertyChangeEvent;
@@ -75,6 +79,7 @@ public class DesignerView {
     private JButton                           rowSave;
     private JButton                           rowDelete;
     private JButton                           rowAdd;
+    private JButton                           rowClone;
     private JButton                           tableTruncate;
     private JButton                           columnScan;
     private JButton                           tableAdd;
@@ -406,6 +411,65 @@ public class DesignerView {
                     }
                 });
 
+        rowClone.addActionListener(
+                new ActionListener() {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        clearError();
+
+                        JTableModel.stopCellEditing(columnsTable);
+                        JTableModel.stopCellEditing(rowsTable);
+
+                        try {
+                            Collection<ColumnFamily> columnFamilies = connection.getColumnFamilies(getSelectedTableName());                            
+							DataCell selectRowkey = null;
+							int selectedRow = rowsTable.getSelectedRow();
+							try {
+								selectRowkey = (DataCell) rowsTable.getValueAt(
+										selectedRow, 0);
+							} catch (Exception ex) {
+								setError("Failed to delete row in HBase: ", ex);
+							}
+							Map<String, String> colunmValueMap = Maps.newHashMap();
+							for(DataCell cell :selectRowkey.getRow().getCells()) {
+								colunmValueMap.put(cell.getColumn().getFullName(), cell.getValue()) ;
+							}
+							
+                            AddRowDialog dialog = new AddRowDialog(getShownTypedColumns(), columnFamilies, colunmValueMap);
+                            if (dialog.showDialog(topPanel)) {
+                                DataRow row = dialog.getRow();
+
+                                owner.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+                                try {
+                                    connection.setRow(getSelectedTableName(), row);
+
+                                    if (scanner != null) {
+                                        scanner.resetCurrent(row.getKey());
+                                    }
+
+                                    // Update the column types according to the added row.
+                                    for (DataCell cell : row.getCells()) {
+                                        clusterConfig.setTableConfig(
+                                                getSelectedTableName(), cell.getColumn().getFullName(), cell.getType().toString());
+                                    }
+
+                                    populateColumnsTable(true, row);
+                                    populateRowsTable(Direction.Current);
+                                }
+                                catch (Exception ex) {
+                                    setError("Failed to update rows in HBase: ", ex);
+                                }
+                                finally {
+                                    owner.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+                                }
+                            }
+                        }
+                        catch (Exception ex) {
+                            setError(String.format("Failed to get column families for table '%s'.", getSelectedTableName()), ex);
+                        }
+                    }
+                });
+        
         rowAdd.addActionListener(
                 new ActionListener() {
                     @Override
@@ -418,7 +482,7 @@ public class DesignerView {
                         try {
                             Collection<ColumnFamily> columnFamilies = connection.getColumnFamilies(getSelectedTableName());
 
-                            AddRowDialog dialog = new AddRowDialog(getShownTypedColumns(), columnFamilies);
+                            AddRowDialog dialog = new AddRowDialog(getShownTypedColumns(), columnFamilies, null);
                             if (dialog.showDialog(topPanel)) {
                                 DataRow row = dialog.getRow();
 
@@ -428,6 +492,15 @@ public class DesignerView {
 
                                     if (scanner != null) {
                                         scanner.resetCurrent(row.getKey());
+                                    }
+                                    int[] selectedRows = rowsTable.getSelectedRows();
+                                    for (int selectedRow : selectedRows) {
+                                        try {
+                                            DataCell key = (DataCell)rowsTable.getValueAt(selectedRow, 0);
+                                        }
+                                        catch (Exception ex) {
+                                            setError("Failed to delete row in HBase: ", ex);
+                                        }
                                     }
 
                                     // Update the column types according to the added row.
@@ -767,63 +840,63 @@ public class DesignerView {
                     }
                 });
 
-        tableExport.addActionListener(
-                new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        clearError();
-
-                        String tableName = getSelectedTableName();
-                        if (tableName != null) {
-                            owner.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-                            try {
-                                QueryScanner scanner = connection.getScanner(tableName, null);
-                                scanner.setColumnTypes(columnTypes);
-
-                                ExportTableDialog dialog = new ExportTableDialog(scanner);
-                                dialog.showDialog(topPanel);
-                            }
-                            catch (Exception ex) {
-                                setError(String.format("Failed to export table %s: ", tableName), ex);
-                            }
-                            finally {
-                                owner.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
-                            }
-                        }
-                    }
-                });
-
-        tableImport.addActionListener(
-                new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        clearError();
-
-                        owner.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
-                        try {
-                            String tableName = getSelectedTableName();
-
-                            Collection<ColumnFamily> columnFamilies;
-                            if (tableName != null) {
-                                columnFamilies = connection.getColumnFamilies(tableName);
-                            }
-                            else {
-                                columnFamilies = new ArrayList<ColumnFamily>();
-                            }
-
-                            ImportTableDialog dialog = new ImportTableDialog(
-                                    connection, tableName, getColumnNameConverter(), getShownTypedColumns(), columnFamilies);
-
-                            dialog.showDialog(topPanel);
-                        }
-                        catch (Exception ex) {
-                            setError("Failed to import to table.", ex);
-                        }
-                        finally {
-                            owner.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
-                        }
-                    }
-                });
+//        tableExport.addActionListener(
+//                new ActionListener() {
+//                    @Override
+//                    public void actionPerformed(ActionEvent e) {
+//                        clearError();
+//
+//                        String tableName = getSelectedTableName();
+//                        if (tableName != null) {
+//                            owner.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+//                            try {
+//                                QueryScanner scanner = connection.getScanner(tableName, null);
+//                                scanner.setColumnTypes(columnTypes);
+//
+//                                ExportTableDialog dialog = new ExportTableDialog(scanner);
+//                                dialog.showDialog(topPanel);
+//                            }
+//                            catch (Exception ex) {
+//                                setError(String.format("Failed to export table %s: ", tableName), ex);
+//                            }
+//                            finally {
+//                                owner.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+//                            }
+//                        }
+//                    }
+//                });
+//
+//        tableImport.addActionListener(
+//                new ActionListener() {
+//                    @Override
+//                    public void actionPerformed(ActionEvent e) {
+//                        clearError();
+//
+//                        owner.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+//                        try {
+//                            String tableName = getSelectedTableName();
+//
+//                            Collection<ColumnFamily> columnFamilies;
+//                            if (tableName != null) {
+//                                columnFamilies = connection.getColumnFamilies(tableName);
+//                            }
+//                            else {
+//                                columnFamilies = new ArrayList<ColumnFamily>();
+//                            }
+//
+//                            ImportTableDialog dialog = new ImportTableDialog(
+//                                    connection, tableName, getColumnNameConverter(), getShownTypedColumns(), columnFamilies);
+//
+//                            dialog.showDialog(topPanel);
+//                        }
+//                        catch (Exception ex) {
+//                            setError("Failed to import to table.", ex);
+//                        }
+//                        finally {
+//                            owner.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+//                        }
+//                    }
+//                });
 
         tableMetadata.addActionListener(
                 new ActionListener() {
@@ -1184,10 +1257,10 @@ public class DesignerView {
 
             int tablesCount = 0;
 
-            if (filter.match(TableUtil.ROOT_TABLE)) {
-                tablesCount++;
-                tablesListModel.addElement(TableUtil.ROOT_TABLE);
-            }
+//            if (filter.match(TableUtil.ROOT_TABLE)) {
+//                tablesCount++;
+//                tablesListModel.addElement(TableUtil.ROOT_TABLE);
+//            }
 
             if (filter.match(TableUtil.META_TABLE)) {
                 tablesCount++;
@@ -2414,6 +2487,7 @@ public class DesignerView {
 
         rowOpen.setEnabled(enabled && rowsTable.getRowCount() > 0);
         rowDelete.setEnabled(enabled && count > 0);
+        rowClone.setEnabled(enabled && count == 1);
         rowCopy.setEnabled(enabled && count > 0);
         rowPaste.setEnabled(hasRowsInClipboard());
         rowSave.setEnabled(changeTracker.hasChanges());
@@ -2916,6 +2990,14 @@ public class DesignerView {
         rowAdd.setText("");
         rowAdd.setToolTipText("Create a new row");
         toolBar5.add(rowAdd);
+        rowClone = new JButton();
+        rowClone.setEnabled(false);
+        rowClone.setIcon(new ImageIcon(getClass().getResource("/images/duplicate.png")));
+        rowClone.setMinimumSize(new Dimension(24, 24));
+        rowClone.setPreferredSize(new Dimension(24, 24));
+        rowClone.setText("");
+        rowClone.setToolTipText("Clone Row");
+        toolBar5.add(rowClone);
         rowDelete = new JButton();
         rowDelete.setEnabled(false);
         rowDelete.setIcon(new ImageIcon(getClass().getResource("/images/delete.png")));

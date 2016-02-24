@@ -112,7 +112,7 @@ public class QueryScanner extends Scanner {
             }
 
             if (this.query.getWord() != null || this.query.getOperator().isUnary()) {
-                WritableByteArrayComparable comparator;
+            	ByteArrayComparable comparator;
 
                 switch (this.query.getOperator()) {
                     case Contains:

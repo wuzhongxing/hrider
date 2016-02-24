@@ -1,7 +1,9 @@
 package hrider.ui.forms;
 
+import com.google.common.collect.Maps;
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
+
 import hrider.data.*;
 import hrider.ui.controls.WideComboBox;
 import hrider.ui.design.JCellEditor;
@@ -10,8 +12,10 @@ import hrider.ui.design.JTableModel;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+
 import java.awt.*;
 import java.awt.event.*;
+import java.util.Map;
 
 /**
  * Copyright (C) 2012 NICE Systems ltd.
@@ -46,7 +50,10 @@ public class AddRowDialog extends JDialog {
     //endregion
 
     //region Constructor
-    public AddRowDialog(Iterable<TypedColumn> columns, final Iterable<ColumnFamily> columnFamilies) {
+    public AddRowDialog(Iterable<TypedColumn> columns, final Iterable<ColumnFamily> columnFamilies, Map<String,String> columnValMap) {
+    	if(columnValMap==null) {
+    		columnValMap = Maps.newHashMap();
+    	}
         setContentPane(this.contentPane);
         setModal(true);
         setTitle("Add new row");
@@ -75,7 +82,7 @@ public class AddRowDialog extends JDialog {
         this.rowsTable.getColumn("Value").setCellEditor(new JCellEditor(null, 2, true));
 
         for (TypedColumn typedColumn : columns) {
-            this.tableModel.addRow(new Object[]{Boolean.TRUE, typedColumn.getColumn(), typedColumn.getType(), null});
+            this.tableModel.addRow(new Object[]{Boolean.TRUE, typedColumn.getColumn(), typedColumn.getType(), columnValMap.get(typedColumn.getColumn().getFullName())});
         }
 
         this.buttonAdd.addActionListener(

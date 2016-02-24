@@ -37,6 +37,10 @@ public class ServerDetails implements Serializable {
      * The port.
      */
     private String port;
+    /**
+     * The znode.
+     */
+    private String znode;
     //endregion
 
     //region Constructor
@@ -48,8 +52,13 @@ public class ServerDetails implements Serializable {
      * @param port The server port.
      */
     public ServerDetails(String host, String port) {
-        this.host = host;
-        this.port = port;
+        this(host,port,"/hbase");
+    }
+    
+    public ServerDetails(String host, String port,String znode) {
+    	this.host = host;
+    	this.port = port;
+    	this.znode = znode;
     }
     //endregion
 
@@ -102,7 +111,15 @@ public class ServerDetails implements Serializable {
         return false;
     }
 
-    @Override
+    public String getZnode() {
+		return znode;
+	}
+
+	public void setZnode(String znode) {
+		this.znode = znode;
+	}
+
+	@Override
     public int hashCode() {
         return this.host.hashCode();
     }

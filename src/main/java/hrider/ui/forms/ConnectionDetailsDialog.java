@@ -38,6 +38,7 @@ public class ConnectionDetailsDialog extends JDialog {
     private JButton           buttonConnect;
     private JButton           buttonCancel;
     private JTextField        zooKeeperServer;
+    private JTextField        znode;
     private JSpinner          zooKeeperPort;
     private ConnectionDetails connectionDetails;
     //endregion
@@ -50,6 +51,7 @@ public class ConnectionDetailsDialog extends JDialog {
         getRootPane().setDefaultButton(this.buttonConnect);
 
         this.zooKeeperPort.setValue(GlobalConfig.instance().get(Integer.class, "connection.zookeeper.defaultPort", "2181"));
+        this.znode.setText("/hbase");
 
         this.buttonConnect.addActionListener(
             new ActionListener() {
@@ -109,7 +111,8 @@ public class ConnectionDetailsDialog extends JDialog {
         this.connectionDetails = new ConnectionDetails() {{
             setZookeeper(
                 new ServerDetails(
-                    ConnectionDetailsDialog.this.zooKeeperServer.getText(), ConnectionDetailsDialog.this.zooKeeperPort.getValue().toString()));
+                    ConnectionDetailsDialog.this.zooKeeperServer.getText(), ConnectionDetailsDialog.this.zooKeeperPort.getValue().toString()
+                    ,ConnectionDetailsDialog.this.znode.getText()));
         }};
 
         this.contentPane.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
@@ -190,7 +193,7 @@ public class ConnectionDetailsDialog extends JDialog {
             0, 0, 1, 2, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_WANT_GROW,
             null, null, null, 0, false));
         final JPanel panel3 = new JPanel();
-        panel3.setLayout(new GridLayoutManager(1, 4, new Insets(0, 0, 0, 0), -1, -1));
+        panel3.setLayout(new GridLayoutManager(1, 6, new Insets(0, 0, 0, 0), -1, -1));
         contentPane.add(
             panel3, new GridConstraints(
             0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW,
@@ -217,6 +220,19 @@ public class ConnectionDetailsDialog extends JDialog {
             zooKeeperPort, new GridConstraints(
             0, 3, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED,
             null, null, null, 0, false));
+        final JLabel labelznode = new JLabel();
+        labelznode.setText("znode:");
+        panel3.add(
+        		labelznode, new GridConstraints(
+            0, 4, 1, 1, GridConstraints.ANCHOR_EAST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null,
+            null, 0, false));
+
+        znode = new JTextField();
+        panel3.add(
+        		znode, new GridConstraints(
+        				0, 5, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED,
+        				null, new Dimension(150, -1), null, 0, false));
+
     }
 
     /**

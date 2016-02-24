@@ -6,18 +6,21 @@ import hrider.data.ColumnFamily;
 import hrider.data.DataCell;
 import hrider.data.DataRow;
 import hrider.data.TableDescriptor;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.io.encoding.DataBlockEncoding;
-import org.apache.hadoop.hbase.io.hfile.CacheConfig;
-import org.apache.hadoop.hbase.io.hfile.HFile;
-import org.apache.hadoop.hbase.regionserver.StoreFile;
-import org.apache.hadoop.hbase.regionserver.StoreFileScanner;
-import org.apache.hadoop.hbase.regionserver.metrics.SchemaMetrics;
+//import org.apache.hadoop.hbase.io.hfile.CacheConfig;
+//import org.apache.hadoop.hbase.io.hfile.HFile;
+//import org.apache.hadoop.hbase.regionserver.StoreFile;
+//import org.apache.hadoop.hbase.regionserver.StoreFileScanner;
+//import org.apache.hadoop.hbase.regionserver.metrics.SchemaMetrics;
 import org.apache.hadoop.hbase.util.Bytes;
+
+import com.google.common.base.Splitter;
 
 import java.io.IOException;
 import java.util.*;
@@ -66,7 +69,7 @@ public class Connection {
      */
     private List<HbaseActionListener> listeners;
     //endregion
-
+    Splitter spliter = Splitter.on(":").limit(2);
     //region Constructor
 
     /**
@@ -363,47 +366,47 @@ public class Connection {
      * @throws IOException Error accessing hbase.
      */
     public void saveTable(String tableName, String path) throws IOException {
-        FileSystem fs = FileSystem.getLocal(this.getConfiguration());
-        HTable table = this.factory.get(tableName);
-
-        Configuration cacheConfig = new Configuration(this.getConfiguration());
-        cacheConfig.setFloat(HConstants.HFILE_BLOCK_CACHE_SIZE_KEY, 0.0f);
-
-        StoreFile.Writer writer = new StoreFile.WriterBuilder(
-            this.getConfiguration(), new CacheConfig(cacheConfig), fs, HFile.DEFAULT_BLOCKSIZE).withFilePath(new Path(path)).build();
-
-        ResultScanner scanner = null;
-
-        try {
-            Scan scan = new Scan();
-            scan.setCaching(GlobalConfig.instance().getBatchSizeForRead());
-
-            scanner = table.getScanner(scan);
-
-            boolean isValid;
-            do {
-                Result result = scanner.next();
-
-                isValid = result != null;
-                if (isValid) {
-                    for (KeyValue keyValue : result.list()) {
-                        writer.append(keyValue);
-                    }
-
-                    for (HbaseActionListener listener : this.listeners) {
-                        listener.saveOperation(tableName, path, result);
-                    }
-                }
-            }
-            while (isValid);
-        }
-        finally {
-            if (scanner != null) {
-                scanner.close();
-            }
-
-            writer.close();
-        }
+//        FileSystem fs = FileSystem.getLocal(this.getConfiguration());
+//        HTable table = this.factory.get(tableName);
+//
+//        Configuration cacheConfig = new Configuration(this.getConfiguration());
+//        cacheConfig.setFloat(HConstants.HFILE_BLOCK_CACHE_SIZE_KEY, 0.0f);
+//
+//        StoreFile.Writer writer = new StoreFile.WriterBuilder(
+//            this.getConfiguration(), new CacheConfig(cacheConfig), fs, HFile.DEFAULT_BLOCKSIZE).withFilePath(new Path(path)).build();
+//
+//        ResultScanner scanner = null;
+//
+//        try {
+//            Scan scan = new Scan();
+//            scan.setCaching(GlobalConfig.instance().getBatchSizeForRead());
+//
+//            scanner = table.getScanner(scan);
+//
+//            boolean isValid;
+//            do {
+//                Result result = scanner.next();
+//
+//                isValid = result != null;
+//                if (isValid) {
+//                    for (KeyValue keyValue : result.list()) {
+//                        writer.append(keyValue);
+//                    }
+//
+//                    for (HbaseActionListener listener : this.listeners) {
+//                        listener.saveOperation(tableName, path, result);
+//                    }
+//                }
+//            }
+//            while (isValid);
+//        }
+//        finally {
+//            if (scanner != null) {
+//                scanner.close();
+//            }
+//
+//            writer.close();
+//        }
     }
 
     /**
@@ -435,90 +438,90 @@ public class Connection {
      * @throws IOException Error accessing hbase.
      */
     public void loadTable(String tableName, String path) throws IOException, TableNotFoundException {
-        FileSystem fs = FileSystem.getLocal(this.getConfiguration());
-        HTable table = this.factory.get(tableName);
-
-        HTableDescriptor td = this.hbaseAdmin.getTableDescriptor(Bytes.toBytes(tableName));
-
-        Collection<ColumnFamily> families = new HashSet<ColumnFamily>();
-        for (HColumnDescriptor column : td.getColumnFamilies()) {
-            families.add(new ColumnFamily(column));
-        }
-
-        StoreFile.Reader reader = new StoreFile.Reader(fs, new Path(path), new CacheConfig(this.getConfiguration()), DataBlockEncoding.NONE);
-
-        try {
-            StoreFileScanner scanner = reader.getStoreFileScanner(false, false);
-            SchemaMetrics.configureGlobally(this.getConfiguration());
-
-            // move to the first row.
-            scanner.seek(new KeyValue(new byte[]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}));
-
-            Collection<ColumnFamily> familiesToCreate = new HashSet<ColumnFamily>();
-
-            Put put = null;
-            List<Put> puts = new ArrayList<Put>();
-
-            boolean isValid;
-            int batchSize = GlobalConfig.instance().getBatchSizeForWrite();
-
-            do {
-                KeyValue kv = scanner.next();
-
-                isValid = kv != null;
-                if (isValid) {
-                    ColumnFamily columnFamily = new ColumnFamily(Bytes.toStringBinary(kv.getFamily()));
-                    if (!families.contains(columnFamily)) {
-                        familiesToCreate.add(columnFamily);
-                    }
-
-                    if (put == null) {
-                        put = new Put(kv.getRow());
-                        puts.add(put);
-                    }
-
-                    if (!Arrays.equals(put.getRow(), kv.getRow())) {
-                        for (HbaseActionListener listener : this.listeners) {
-                            listener.loadOperation(tableName, path, put);
-                        }
-
-                        if (puts.size() == batchSize) {
-                            if (!familiesToCreate.isEmpty()) {
-                                createFamilies(tableName, toDescriptors(familiesToCreate));
-
-                                families.addAll(familiesToCreate);
-                                familiesToCreate.clear();
-                            }
-
-                            HTableUtil.bucketRsPut(table, puts);
-                            puts.clear();
-                        }
-
-                        put = new Put(kv.getRow());
-                        puts.add(put);
-                    }
-
-                    put.add(kv);
-                }
-            }
-            while (isValid);
-
-            // add the last put to the table.
-            if (!puts.isEmpty()) {
-                for (HbaseActionListener listener : this.listeners) {
-                    listener.loadOperation(tableName, path, put);
-                }
-
-                if (!familiesToCreate.isEmpty()) {
-                    createFamilies(tableName, toDescriptors(familiesToCreate));
-                }
-
-                HTableUtil.bucketRsPut(table, puts);
-            }
-        }
-        finally {
-            reader.close(false);
-        }
+//        FileSystem fs = FileSystem.getLocal(this.getConfiguration());
+//        HTable table = this.factory.get(tableName);
+//
+//        HTableDescriptor td = this.hbaseAdmin.getTableDescriptor(Bytes.toBytes(tableName));
+//
+//        Collection<ColumnFamily> families = new HashSet<ColumnFamily>();
+//        for (HColumnDescriptor column : td.getColumnFamilies()) {
+//            families.add(new ColumnFamily(column));
+//        }
+//
+//        StoreFile.Reader reader = new StoreFile.Reader(fs, new Path(path), new CacheConfig(this.getConfiguration()), DataBlockEncoding.NONE);
+//
+//        try {
+//            StoreFileScanner scanner = reader.getStoreFileScanner(false, false);
+//            SchemaMetrics.configureGlobally(this.getConfiguration());
+//
+//            // move to the first row.
+//            scanner.seek(new KeyValue(new byte[]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}));
+//
+//            Collection<ColumnFamily> familiesToCreate = new HashSet<ColumnFamily>();
+//
+//            Put put = null;
+//            List<Put> puts = new ArrayList<Put>();
+//
+//            boolean isValid;
+//            int batchSize = GlobalConfig.instance().getBatchSizeForWrite();
+//
+//            do {
+//                KeyValue kv = scanner.next();
+//
+//                isValid = kv != null;
+//                if (isValid) {
+//                    ColumnFamily columnFamily = new ColumnFamily(Bytes.toStringBinary(kv.getFamily()));
+//                    if (!families.contains(columnFamily)) {
+//                        familiesToCreate.add(columnFamily);
+//                    }
+//
+//                    if (put == null) {
+//                        put = new Put(kv.getRow());
+//                        puts.add(put);
+//                    }
+//
+//                    if (!Arrays.equals(put.getRow(), kv.getRow())) {
+//                        for (HbaseActionListener listener : this.listeners) {
+//                            listener.loadOperation(tableName, path, put);
+//                        }
+//
+//                        if (puts.size() == batchSize) {
+//                            if (!familiesToCreate.isEmpty()) {
+//                                createFamilies(tableName, toDescriptors(familiesToCreate));
+//
+//                                families.addAll(familiesToCreate);
+//                                familiesToCreate.clear();
+//                            }
+//
+//                            HTableUtil.bucketRsPut(table, puts);
+//                            puts.clear();
+//                        }
+//
+//                        put = new Put(kv.getRow());
+//                        puts.add(put);
+//                    }
+//
+//                    put.add(kv);
+//                }
+//            }
+//            while (isValid);
+//
+//            // add the last put to the table.
+//            if (!puts.isEmpty()) {
+//                for (HbaseActionListener listener : this.listeners) {
+//                    listener.loadOperation(tableName, path, put);
+//                }
+//
+//                if (!familiesToCreate.isEmpty()) {
+//                    createFamilies(tableName, toDescriptors(familiesToCreate));
+//                }
+//
+//                HTableUtil.bucketRsPut(table, puts);
+//            }
+//        }
+//        finally {
+//            reader.close(false);
+//        }
     }
 
     /**
@@ -543,13 +546,24 @@ public class Connection {
             Put put = new Put(row.getKey().getValue());
 
             for (DataCell cell : row.getCells()) {
+            	String sFamily = cell.getColumn().getFamily();
+            	String sColumn = cell.getColumn().getName();
+            	if(sFamily==null){
+            		List<String> columnQulifier = spliter.splitToList(cell.getColumn().getName());
+            		sFamily = columnQulifier.get(0);
+            		sColumn = columnQulifier.get(1);
+            	}
                 if (!cell.isKey()) {
-                    if (!families.contains(cell.getColumn().getColumnFamily())) {
-                        familiesToCreate.add(cell.getColumn().getColumnFamily());
+//                	if (!families.contains(cell.getColumn().getColumnFamily())) {
+                    if (!families.contains(new ColumnFamily(sFamily))) {
+//                        familiesToCreate.add(cell.getColumn().getColumnFamily());
+                        familiesToCreate.add(new ColumnFamily(sFamily));
                     }
 
-                    byte[] family = Bytes.toBytesBinary(cell.getColumn().getFamily());
-                    byte[] column = Bytes.toBytesBinary(cell.getColumn().getName());
+//                    byte[] family = Bytes.toBytesBinary(cell.getColumn().getFamily());
+//                    byte[] column = Bytes.toBytesBinary(cell.getColumn().getName());
+                    byte[] family = Bytes.toBytesBinary(sFamily);
+                    byte[] column = Bytes.toBytesBinary(sColumn);
                     byte[] value = cell.getValueAsByteArray();
 
                     put.add(family, column, value);
@@ -591,12 +605,22 @@ public class Connection {
         Put put = new Put(row.getKey().getValue());
         for (DataCell cell : row.getCells()) {
             if (!cell.isKey()) {
-                if (!families.contains(cell.getColumn().getColumnFamily())) {
-                    familiesToCreate.add(cell.getColumn().getColumnFamily());
+            	String sFamily = cell.getColumn().getFamily();
+            	String sColumn = cell.getColumn().getName();
+            	if(sFamily==null){
+            		List<String> columnQulifier = spliter.splitToList(cell.getColumn().getName());
+            		sFamily = columnQulifier.get(0);
+            		sColumn = columnQulifier.get(1);
+            	}
+//                if (!families.contains(cell.getColumn().getColumnFamily())) {
+                	if (!families.contains(new ColumnFamily(sFamily))) {
+//                		familiesToCreate.add(cell.getColumn().getColumnFamily());
+                    familiesToCreate.add(new ColumnFamily(sFamily));
                 }
-
-                byte[] family = Bytes.toBytesBinary(cell.getColumn().getFamily());
-                byte[] column = Bytes.toBytesBinary(cell.getColumn().getName());
+//                byte[] family = Bytes.toBytesBinary(cell.getColumn().getFamily());
+//                byte[] column = Bytes.toBytesBinary(cell.getColumn().getName());
+                byte[] family = Bytes.toBytesBinary(sFamily);
+                byte[] column = Bytes.toBytesBinary(sColumn);
                 byte[] value = cell.getValueAsByteArray();
 
                 put.add(family, column, value);

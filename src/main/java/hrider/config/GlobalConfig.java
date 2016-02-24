@@ -37,7 +37,7 @@ public class GlobalConfig extends PropertiesConfig {
     private static final String KEY_CONVERTERS_CODE_FOLDER         = "global.converters.code.folder";
 
     private static final String DEFAULT_DATE_FORMAT                    = "yyyy-MM-dd HH:mm:ss.SSS ZZ";
-    private static final String DEFAULT_DATE_TIME_ZONE                 = "UTC";
+    private static final String DEFAULT_DATE_TIME_ZONE                 = "CST";
     private static final String DEFAULT_EXTERNAL_VIEWER_FILE_EXTENSION = ".csv";
     private static final String DEFAULT_EXTERNAL_VIEWER_DELIMETER      = ",";
     private static final String DEFAULT_BATCH_READ_SIZE                = "1000";
