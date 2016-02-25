@@ -2,6 +2,7 @@ package hrider.ui.forms;
 
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
+
 import hrider.actions.Action;
 import hrider.actions.RunnableAction;
 import hrider.config.ClusterConfig;
@@ -25,6 +26,7 @@ import hrider.ui.controls.JTab;
 import hrider.ui.views.DesignerView;
 
 import javax.swing.*;
+
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -249,6 +251,8 @@ public class Window {
 
     //region Public Methods
     public static void main(String[] args) {
+    	String home = System.getProperty("user.dir");
+    	System.setProperty("hadoop.home.dir",home);
         // Schedule a job for the event-dispatching thread:
         // creating and showing this application's GUI.
         SwingUtilities.invokeLater(
