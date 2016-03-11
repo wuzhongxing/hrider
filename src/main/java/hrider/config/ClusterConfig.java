@@ -48,13 +48,14 @@ public class ClusterConfig extends PropertiesConfig {
     public ConnectionDetails getConnection() {
         final String zookeeperHost = get(String.class, "connection.zookeeper.host", null);
         final String zookeeperPort = get(String.class, "connection.zookeeper.port", null);
+        final String zookeeperquorum = get(String.class, "connection.zookeeper.quorum", null);
 
-        if (zookeeperHost == null || zookeeperPort == null) {
+        if (zookeeperHost == null || zookeeperPort == null || zookeeperquorum==null) {
             return null;
         }
-
+        final ServerDetails sd = new ServerDetails(zookeeperHost, zookeeperPort, zookeeperquorum);
         return new ConnectionDetails() {{
-            setZookeeper(new ServerDetails(zookeeperHost, zookeeperPort));
+            setZookeeper(sd);
         }};
     }
 
@@ -66,6 +67,7 @@ public class ClusterConfig extends PropertiesConfig {
     public void setConnection(ConnectionDetails connection) {
         set("connection.zookeeper.host", connection.getZookeeper().getHost());
         set("connection.zookeeper.port", connection.getZookeeper().getPort());
+        set("connection.zookeeper.quorum", connection.getZookeeper().getZnode());
     }
 
     /**
