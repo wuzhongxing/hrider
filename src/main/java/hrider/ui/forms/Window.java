@@ -252,7 +252,7 @@ public class Window {
     //region Public Methods
     public static void main(String[] args) {
     	String home = System.getProperty("user.dir");
-    	System.setProperty("hadoop.home.dir",home);
+    	System.setProperty("hadoop.home.dir",home+"/bin/hadoop");
         // Schedule a job for the event-dispatching thread:
         // creating and showing this application's GUI.
         SwingUtilities.invokeLater(
